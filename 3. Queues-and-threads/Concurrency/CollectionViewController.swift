@@ -29,25 +29,74 @@
 import UIKit
 
 final class CollectionViewController: UICollectionViewController {
+  
   private let cellSpacing: CGFloat = 1
   private let columns: CGFloat = 3
-
+  
   private var cellSize: CGFloat?
   private var urls: [URL] = []
-
+  
   override func viewDidLoad() {
     super.viewDidLoad()
-
-    guard let plist = Bundle.main.url(forResource: "Photos", withExtension: "plist"),
-          let contents = try? Data(contentsOf: plist),
-          let serial = try? PropertyListSerialization.propertyList(from: contents, format: nil),
-          let serialUrls = serial as? [String] else {
+    
+    guard
+      let plist = Bundle.main.url(forResource: "Photos", withExtension: "plist"),
+      let contents = try? Data(contentsOf: plist),
+      let serial = try? PropertyListSerialization.propertyList(from: contents, format: nil),
+      let serialUrls = serial as? [String]
+    else {
       print("Something went horribly wrong!")
       return
     }
-
+    
     urls = serialUrls.compactMap { URL(string: $0) }
   }
+  
+  private func downloadWithGlobalQueue(at indexPath: IndexPath) {
+    
+    DispatchQueue.global(qos: .utility).async { [weak self] in
+      
+      guard let self = self else { return }
+      
+      let url = self.urls[indexPath.item]
+      
+      guard
+        let data = try? Data(contentsOf: url),
+        let image = UIImage(data: data)
+      else {
+        return
+      }
+      
+      DispatchQueue.main.async {
+        if let cell = self.collectionView.cellForItem(at: indexPath) as? PhotoCell {
+          cell.display(image: image)
+        }
+      }
+      
+    }
+  }
+  
+  private func downloadWithUrlSession(at indexPath: IndexPath) {
+    
+    URLSession.shared.dataTask(with: urls[indexPath.item]) { [weak self] data, response, error in
+      guard
+        let self = self,
+        let data = data,
+        let image = UIImage(data: data)
+      else {
+        return
+      }
+      
+      DispatchQueue.main.async {
+        if let cell = self.collectionView.cellForItem(at: indexPath) as? PhotoCell {
+          cell.display(image: image)
+        }
+      }
+      
+    }.resume()
+    
+  }
+  
 }
 
 // MARK: - Data source
@@ -55,39 +104,45 @@ extension CollectionViewController {
   override func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
     return self.urls.count
   }
-
+  
   override func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
     let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "normal", for: indexPath) as! PhotoCell
-
-    if let data = try? Data(contentsOf: urls[indexPath.item]),
-      let image = UIImage(data: data) {
-      cell.display(image: image)
-    } else {
-      cell.display(image: nil)
-    }
-
+    
+    cell.display(image: nil)
+    downloadWithGlobalQueue(at: indexPath)
+    
     return cell
   }
 }
 
 // MARK: - UICollectionViewDelegateFlowLayout
 extension CollectionViewController: UICollectionViewDelegateFlowLayout {
-  func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
+  
+  func collectionView(_ collectionView: UICollectionView,
+                      layout collectionViewLayout: UICollectionViewLayout,
+                      sizeForItemAt indexPath: IndexPath) -> CGSize {
+    
     if cellSize == nil {
       let layout = collectionViewLayout as! UICollectionViewFlowLayout
       let emptySpace = layout.sectionInset.left + layout.sectionInset.right + (columns * cellSpacing - 1)
       cellSize = (view.frame.size.width - emptySpace) / columns
     }
-
+    
     return CGSize(width: cellSize!, height: cellSize!)
   }
-
-  func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, minimumLineSpacingForSectionAt section: Int) -> CGFloat {
+  
+  func collectionView(_ collectionView: UICollectionView,
+                      layout collectionViewLayout: UICollectionViewLayout,
+                      minimumLineSpacingForSectionAt section: Int) -> CGFloat {
     return cellSpacing
   }
-
-  func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, minimumInteritemSpacingForSectionAt section: Int) -> CGFloat {
+  
+  func collectionView(_ collectionView: UICollectionView,
+                      layout collectionViewLayout: UICollectionViewLayout,
+                      minimumInteritemSpacingForSectionAt section: Int) -> CGFloat {
+    
     return cellSpacing
   }
+  
 }
 
