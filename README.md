@@ -66,7 +66,7 @@ queue.async {
 ```swift
 
     DispatchQueue.global(qos: .utility).async { [weak self] in
-      // Update the UI here
+     
     }
     
 ```
